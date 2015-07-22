@@ -2,9 +2,6 @@ package main
 
 import (
 	"io/ioutil"
-	"bytes"
-	"fmt"
-	"encoding/json"
 	"encoding/xml"
 	"log"
 	"net/http"
@@ -32,17 +29,20 @@ type Post struct{
 func main(){
 		
 	result,err := ReadRss("http://servis.idnes.cz/rss.aspx?c=zpravodaj")
-	
 	if err != nil {log.Fatal(err)}	
-	buf := new(bytes.Buffer)
-	jsonEncoder := json.NewEncoder(buf)
-	jsonEncoder.Encode(result)
+	newsChannel, err := ExtractInfo(result)
 	
+	log.Println(newsChannel)
+	
+}
+
+
+func ExtractInfo(doc *RssDoc)(*InfoChanel,error){
 	output := InfoChanel{
-		Name: string(result.Channel.Titles[0]),
+		Name: string(doc.Channel.Titles[0]),
 	}
 	posts := make([]Post,0)
-	for _,item := range result.Channel.Items{
+	for _,item := range doc.Channel.Items{
 		
 		newPost := Post{
 			string(item.Titles[0]),
@@ -54,12 +54,7 @@ func main(){
 	
 	output.Posts = posts
 	
-	
-}
-
-
-func ExtractInfo(doc RssDoc)(*InfoChanel,error){
-	
+	return &output, nil
 }
 
 

@@ -8,8 +8,10 @@ import (
 	"os"
 	"fmt"
 	"bufio"
+	"time"
+	"text/template"
+//	"bytes"
 )
-
 
 
 func main() {
@@ -20,35 +22,58 @@ func main() {
 		return
 	}
 
-	sourcesFile,err := os.Open("rss.source",)
-	defer sourcesFile.Close()
-	if err != nil {log.Fatal("Cant read file with rss sources",err)}
+	sourcesFile, err := os.Open("rss.source", )
+	defer sourcesFile.Close();
+	if err != nil {log.Fatal("Cant read file with rss sources", err)}
 
 
-	output := make(chan string, 100)
+	output := make(chan *InfoChanel, 100)
+
+	sync := make(chan bool)
+
+
 	//sources := make([]string,0)
 	scanner := bufio.NewScanner(sourcesFile)
 
 
-	for scanner.Scan() {
-		//append(sources,scanner.Text())
-		go func(c chan string){
+
+	//start asynchronous reading
+	go func(c chan *InfoChanel) {
+		for scanner.Scan() {
 			url := scanner.Text();
-			//fmt.Println(url)
 			if url == "" {return }
-			channelInfo,err := ReadNewsFrom(url)
-			if err != nil {c <- fmt.Sprintln("Failed to load news from url: "+url)}
-			c <- fmt.Sprintln(channelInfo)
-		}(output)
-		fmt.Println(<-output)
-	}
+			channelInfo, err := ReadNewsFrom(url)
+			if err != nil {
+				//c <- fmt.Sprintln("Failed to load news from url: "+url)
+				close(c)
+				return
+			}
+			c <- channelInfo
+		}
+		sync <- true
+	}(output)
+
+	go consume(output)
 
 
+	<-sync
 
-
-	//ReadNewsFrom("http://servis.idnes.cz/rss.aspx?c=zpravodaj")
-
+	//Clen up
+	close(output)
+	close(sync)
 }
+
+func consume(newschannel chan *InfoChanel) {
+	tmplt := template.Must(template.ParseFiles("news.tmpl"))
+	for {
+		val, ok := <- newschannel
+		if !ok {return }
+//		buf := new(bytes.Buffer)
+		tmplt.ExecuteTemplate(os.Stdout,"NewsTemplate",val)
+		time.Sleep(1)
+	}
+}
+
 
 func ReadNewsFrom(url string) (*InfoChanel, error) {
 	result, err := ReadRss(url)

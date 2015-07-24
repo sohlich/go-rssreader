@@ -11,6 +11,7 @@ import (
 	"time"
 	"text/template"
 //	"bytes"
+	"regexp"
 )
 
 
@@ -89,9 +90,15 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	posts := make([]Post, 0)
 	for _, item := range doc.Channel.Items {
 
+		content := string(item.Descriptions[0])
+		regex,err := regexp.Compile("<ul>.*</ul>|<br.*>.*<img.*")
+		if err != nil {continue}
+		content = regex.ReplaceAllString(content,"")
+
+
 		newPost := Post{
 			string(item.Titles[0]),
-			string(item.Descriptions[0]),
+			content,
 			string(item.Links[0]),
 		}
 		posts = append(posts, newPost)

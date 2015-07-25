@@ -1,51 +1,71 @@
 package main
 
 import (
-	"io/ioutil"
-	"encoding/xml"
-	"log"
-	"net/http"
-	"os"
-	"fmt"
 	"bufio"
-	"time"
-	"text/template"
-//	"bytes"
+	"log"
+	"os"
 	"regexp"
-)
+	"time"
 
+	"encoding/xml"
+	"io/ioutil"
+	"net/http"
+	"text/template"
+	"fmt"
+)
 
 func main() {
 	argcount := len(os.Args)
 
-	if argcount < 2 {
-		fmt.Println(help)
-		return
+	var command string
+	if argcount > 1 {
+		command = os.Args[1]
+	} else {
+		command = "readall"
 	}
 
-	sourcesFile, err := os.Open("rss.source", )
-	defer sourcesFile.Close();
-	if err != nil {log.Fatal("Cant read file with rss sources", err)}
+	switch command {
+	case "readall":
+		ReadAll()
+	case "url":
+		ReadUrl(os.Args[2])
+		default:
+		fmt.Println("Unknown command")
+		fmt.Println(help)
+	}
 
+}
+
+func ReadUrl(url string) {
+	val, err := ReadNewsFrom(url)
+	tmplt := template.Must(template.ParseFiles("news.tmpl"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	tmplt.ExecuteTemplate(os.Stdout, "NewsTemplate", val)
+}
+
+func ReadAll() {
+	sourcesFile, err := os.Open("rss.source")
+	defer sourcesFile.Close()
+	if err != nil {
+		log.Fatal("Cant read file with rss sources", err)
+	}
 
 	output := make(chan *InfoChanel, 100)
 
 	sync := make(chan bool)
-
-
-	//sources := make([]string,0)
 	scanner := bufio.NewScanner(sourcesFile)
-
-
 
 	//start asynchronous reading
 	go func(c chan *InfoChanel) {
 		for scanner.Scan() {
-			url := scanner.Text();
-			if url == "" {return }
+			url := scanner.Text()
+			if url == "" {
+				return
+			}
 			channelInfo, err := ReadNewsFrom(url)
 			if err != nil {
-				//c <- fmt.Sprintln("Failed to load news from url: "+url)
 				close(c)
 				return
 			}
@@ -55,7 +75,6 @@ func main() {
 	}(output)
 
 	go consume(output)
-
 
 	<-sync
 
@@ -67,18 +86,20 @@ func main() {
 func consume(newschannel chan *InfoChanel) {
 	tmplt := template.Must(template.ParseFiles("news.tmpl"))
 	for {
-		val, ok := <- newschannel
-		if !ok {return }
-//		buf := new(bytes.Buffer)
-		tmplt.ExecuteTemplate(os.Stdout,"NewsTemplate",val)
+		val, ok := <-newschannel
+		if !ok {
+			return
+		}
+		tmplt.ExecuteTemplate(os.Stdout, "NewsTemplate", val)
 		time.Sleep(1)
 	}
 }
 
-
 func ReadNewsFrom(url string) (*InfoChanel, error) {
 	result, err := ReadRss(url)
-	if err != nil {log.Fatal(err)}
+	if err != nil {
+		log.Fatal(err)
+	}
 	newsChannel, err := ExtractInfo(result)
 	return newsChannel, err
 }
@@ -91,10 +112,9 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	for _, item := range doc.Channel.Items {
 
 		content := string(item.Descriptions[0])
-		regex,err := regexp.Compile("<ul>.*</ul>|<br.*>.*<img.*")
-		if err != nil {continue}
-		content = regex.ReplaceAllString(content,"")
-
+				regex,err := regexp.Compile("<ul>.*</ul>|<br.*>.*<img.*")
+				if err != nil {continue}
+				content = regex.ReplaceAllString(content,"")
 
 		newPost := Post{
 			string(item.Titles[0]),
@@ -109,17 +129,16 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	return &output, nil
 }
 
-
 func ReadRss(url string) (*RssDoc, error) {
 	resp, err := http.Get(url)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	content, err := ioutil.ReadAll(resp.Body)
-	if err != nil {log.Fatal(err)}
-	result := RssDoc{};
+	if err != nil {
+		log.Fatal(err)
+	}
+	result := RssDoc{}
 	xml.Unmarshal(content, &result)
 	return &result, nil
 }
-
-
-
-

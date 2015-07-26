@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"text/template"
 	"fmt"
+	"io"
 )
 
 func main() {
@@ -96,10 +97,10 @@ func consume(newschannel chan *InfoChanel) {
 }
 
 func ReadNewsFrom(url string) (*InfoChanel, error) {
-	result, err := ReadRss(url)
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp, err := http.Get(url)
+	if err != nil {return nil, err}
+	result, err := ReadRss(resp.Body)
+	if err != nil {log.Fatal(err)}
 	newsChannel, err := ExtractInfo(result)
 	return newsChannel, err
 }
@@ -110,12 +111,8 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	}
 	posts := make([]Post, 0)
 	for _, item := range doc.Channel.Items {
-
-		content := string(item.Descriptions[0])
-				regex,err := regexp.Compile("<ul>.*</ul>|<br.*>.*<img.*")
-				if err != nil {continue}
-				content = regex.ReplaceAllString(content,"")
-
+		content,err := RemoveAllHtml(string(item.Descriptions[0]))
+		if err!= nil{continue}
 		newPost := Post{
 			string(item.Titles[0]),
 			content,
@@ -129,12 +126,16 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	return &output, nil
 }
 
-func ReadRss(url string) (*RssDoc, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	content, err := ioutil.ReadAll(resp.Body)
+func RemoveAllHtml(content string) (string,error) {
+	regex,err := regexp.Compile("<[^>]*>.*</[^>]*>|<[^>]*>")
+	if err != nil {return "",err}
+	content = regex.ReplaceAllString(content,"")
+	return content,nil
+}
+
+
+func ReadRss(reader io.Reader) (*RssDoc, error) {
+	content, err := ioutil.ReadAll(reader)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -142,3 +143,4 @@ func ReadRss(url string) (*RssDoc, error) {
 	xml.Unmarshal(content, &result)
 	return &result, nil
 }
+

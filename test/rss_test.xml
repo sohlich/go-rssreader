@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title>Business Insider India</title>
+        <link>http://www.businessinsider.in/</link>
+        <description>Business Insider Stories</description>
+        <language>en-gb</language>
+        <copyright>Copyright:(C) 2015 Bennett Coleman &amp; Co. http://www.businessinsider.in/privacypolicy.cms</copyright>
+        <image>
+            <url>http://www.businessinsider.in/photo/28596133.cms</url>
+            <title>Business Insider India</title>
+            <link>http://www.businessinsider.in</link>
+        </image>
+        <lastBuildDate>Sat, 25 Jul 2015 17:03:18 GMT</lastBuildDate>
+        <atom:link type="application/rss+xml" href="/rsstopfeeds.cms" rel="self" />
+        <item>
+            <title>This crazy addictive game tests how well you see color - but be ready for the results</title>
+            <link>http://www.businessinsider.in/This-crazy-addictive-game-tests-how-well-you-see-color-but-be-ready-for-the-results/articleshow/48218048.cms?utm_source=ten_minutes_with&amp;utm_medium=Referral&amp;utm_campaign=Content_Patnership</link>
+            <guid>http://www.businessinsider.in/This-crazy-addictive-game-tests-how-well-you-see-color-but-be-ready-for-the-results/articleshow/48218048.cms?utm_source=ten_minutes_with&amp;utm_medium=Referral&amp;utm_campaign=Content_Patnership</guid>
+            <pubDate>25 Jul 2015, 20:50</pubDate>
+            <description><![CDATA[As a former newspaper designer, I thought this game would be easy. After all, I used my eyes professionally for years to judge color, and I&amp;#160;already have]]></description>
+            <!--/short_feed_description.cms?msid=48218048potime:51-->
+        </item>
+    </channel>
+</rss>

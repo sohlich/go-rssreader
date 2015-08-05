@@ -8,35 +8,45 @@ import (
 	"time"
 
 	"encoding/xml"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"text/template"
-	"fmt"
-	"io"
+
+	"github.com/codegangsta/cli"
 )
 
 func main() {
-	argcount := len(os.Args)
 
-	var command string
-	if argcount > 1 {
-		command = os.Args[1]
-	} else {
-		command = "readall"
+	app := cli.NewApp()
+	app.Name = "rssreader"
+	app.Usage = "read the rss feed to command line"
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "url",
+			Usage: "url to read from",
+		},
 	}
 
-	switch command {
-	case "readall":
-		ReadAll()
-	case "url":
-		ReadUrl(os.Args[2])
-		default:
-		fmt.Println("Unknown command")
-		fmt.Println(help)
+	app.Action = func(c *cli.Context) {
+		fmt.Printf("Url %s", c.String("url"))
+
+		val := c.String("url")
+
+		if val != "" {
+			fmt.Println("Reading one URL")
+			ReadUrl(val)
+		} else {
+			fmt.Println("Raeading all sources")
+			ReadAll()
+		}
 	}
 
+	app.Run(os.Args)
 }
 
+//Read one rss source
 func ReadUrl(url string) {
 	val, err := ReadNewsFrom(url)
 	tmplt := template.Must(template.ParseFiles("news.tmpl"))
@@ -46,6 +56,7 @@ func ReadUrl(url string) {
 	tmplt.ExecuteTemplate(os.Stdout, "NewsTemplate", val)
 }
 
+//Read all sources from rss.source file
 func ReadAll() {
 	sourcesFile, err := os.Open("rss.source")
 	defer sourcesFile.Close()
@@ -58,7 +69,7 @@ func ReadAll() {
 	sync := make(chan bool)
 	scanner := bufio.NewScanner(sourcesFile)
 
-	//start asynchronous reading
+	//asynchronous url reader
 	go func(c chan *InfoChanel) {
 		for scanner.Scan() {
 			url := scanner.Text()
@@ -75,15 +86,18 @@ func ReadAll() {
 		sync <- true
 	}(output)
 
+	//asynchronous content consumer
 	go consume(output)
 
-	<-sync
+	<-sync //wai until all done
 
-	//Clen up
+	//Clean up
 	close(output)
 	close(sync)
 }
 
+//Asynchronously consumes the content comming from gorutine
+//the content is then passed to template and written to command line
 func consume(newschannel chan *InfoChanel) {
 	tmplt := template.Must(template.ParseFiles("news.tmpl"))
 	for {
@@ -98,21 +112,28 @@ func consume(newschannel chan *InfoChanel) {
 
 func ReadNewsFrom(url string) (*InfoChanel, error) {
 	resp, err := http.Get(url)
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	result, err := ReadRss(resp.Body)
-	if err != nil {log.Fatal(err)}
+	if err != nil {
+		log.Fatal(err)
+	}
 	newsChannel, err := ExtractInfo(result)
 	return newsChannel, err
 }
 
+//Reads informations from parsed RSSDoc
 func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	output := InfoChanel{
 		Name: string(doc.Channel.Titles[0]),
 	}
 	posts := make([]Post, 0)
 	for _, item := range doc.Channel.Items {
-		content,err := RemoveAllHtml(string(item.Descriptions[0]))
-		if err!= nil{continue}
+		content, err := RemoveAllHtml(string(item.Descriptions[0]))
+		if err != nil {
+			continue
+		}
 		newPost := Post{
 			string(item.Titles[0]),
 			content,
@@ -126,14 +147,18 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	return &output, nil
 }
 
-func RemoveAllHtml(content string) (string,error) {
-	regex,err := regexp.Compile("<[^>]*>.*</[^>]*>|<[^>]*>")
-	if err != nil {return "",err}
-	content = regex.ReplaceAllString(content,"")
-	return content,nil
+//Removes all html with its content so only plain
+//text will survive.
+func RemoveAllHtml(content string) (string, error) {
+	regex, err := regexp.Compile("<[^>]*>.*</[^>]*>|<[^>]*>")
+	if err != nil {
+		return "", err
+	}
+	content = regex.ReplaceAllString(content, "")
+	return content, nil
 }
 
-
+//Parse rss feed to RssDoc
 func ReadRss(reader io.Reader) (*RssDoc, error) {
 	content, err := ioutil.ReadAll(reader)
 	if err != nil {
@@ -143,4 +168,3 @@ func ReadRss(reader io.Reader) (*RssDoc, error) {
 	xml.Unmarshal(content, &result)
 	return &result, nil
 }
-

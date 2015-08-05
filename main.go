@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"text/template"
 
 	"github.com/codegangsta/cli"
@@ -46,6 +47,25 @@ func main() {
 	app.Run(os.Args)
 }
 
+//Loads url strings from source file
+func parseSourceFile(pathToFile string) ([]string, error) {
+	sourcesFile, err := os.Open(pathToFile)
+	defer sourcesFile.Close()
+	if err != nil {
+		log.Fatal("Cant read file with rss sources", err)
+	}
+	scanner := bufio.NewScanner(sourcesFile)
+	urlList := []string{}
+	for scanner.Scan() {
+		validatedUrl, err := url.Parse(scanner.Text())
+		if err != nil {
+			continue
+		}
+		urlList = append(urlList, validatedUrl.String())
+	}
+	return urlList, err
+}
+
 //Read one rss source
 func ReadUrl(url string) {
 	val, err := ReadNewsFrom(url)
@@ -58,21 +78,21 @@ func ReadUrl(url string) {
 
 //Read all sources from rss.source file
 func ReadAll() {
-	sourcesFile, err := os.Open("rss.source")
-	defer sourcesFile.Close()
+
+	urlList, err := parseSourceFile("rss.source")
+
 	if err != nil {
-		log.Fatal("Cant read file with rss sources", err)
+		log.Fatal(err)
 	}
 
 	output := make(chan *InfoChanel, 100)
 
 	sync := make(chan bool)
-	scanner := bufio.NewScanner(sourcesFile)
 
 	//asynchronous url reader
 	go func(c chan *InfoChanel) {
-		for scanner.Scan() {
-			url := scanner.Text()
+		for _, url := range urlList {
+			// url := scanner.Text()
 			if url == "" {
 				return
 			}

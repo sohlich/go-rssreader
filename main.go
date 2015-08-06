@@ -2,38 +2,34 @@ package main
 
 import (
 	"bufio"
-	"log"
+	"fmt"
 	"os"
 	"regexp"
 	"time"
 
 	"encoding/xml"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"text/template"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 )
 
-//Regex for url validation
-const urlValidatorRegex = "^((ftp|http|https):\\/\\/)?([a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)+.*)$"
+const (
+	VERSION           = "v0.1.0"
+	urlValidatorRegex = "^((ftp|http|https):\\/\\/)?([a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)+.*)$"
+	htmlReplacerRegex = "<[^>]*>.*</[^>]*>|<[^>]*>"
+)
 
-//Regex to remove all html from content
-const htmlReplacerRegex = "<[^>]*>.*</[^>]*>|<[^>]*>"
-
-//regex validator for URL
-var urlValidator *regexp.Regexp = regexp.MustCompile(urlValidatorRegex)
-
-//regex replacer for HTML
-var htmlReplacer *regexp.Regexp = regexp.MustCompile(htmlReplacerRegex)
-
-//Parsed template
-var tmplt *template.Template = template.Must(template.ParseFiles("news.tmpl"))
+var (
+	urlValidator *regexp.Regexp     = regexp.MustCompile(urlValidatorRegex)           //regex validator for URL
+	htmlReplacer *regexp.Regexp     = regexp.MustCompile(htmlReplacerRegex)           //regex replacer for HTML
+	tmplt        *template.Template = template.Must(template.ParseFiles("news.tmpl")) //Parsed template
+)
 
 func main() {
-
 	app := cli.NewApp()
 	app.Name = "rssreader"
 	app.Usage = "read the rss feed to command line"
@@ -45,15 +41,10 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) {
-		fmt.Printf("Url %s", c.String("url"))
-
 		val := c.String("url")
-
 		if val != "" {
-			fmt.Println("Reading one URL")
 			ReadUrl(val)
 		} else {
-			fmt.Println("Raeading all sources")
 			ReadAll()
 		}
 	}
@@ -62,21 +53,25 @@ func main() {
 }
 
 //Loads url strings from source file
-func parseSourceFile(pathToFile string) ([]string, error) {
+func parseSourceFile(pathToFile string) (<-chan string, error) {
 	sourcesFile, err := os.Open(pathToFile)
-	defer sourcesFile.Close()
+	// defer sourcesFile.Close()
 	if err != nil {
 		log.Fatal("Cant read file with rss sources", err)
 	}
+	output := make(chan string)
 	scanner := bufio.NewScanner(sourcesFile)
-	urlList := []string{}
-	for scanner.Scan() {
-		url := scanner.Text()
-		if urlValidator.MatchString(url) {
-			urlList = append(urlList, url)
+	go func(sourcesFile *os.File) {
+		for scanner.Scan() {
+			url := scanner.Text()
+			if urlValidator.MatchString(url) {
+				output <- url
+			}
 		}
-	}
-	return urlList, err
+		close(output)
+		sourcesFile.Close()
+	}(sourcesFile)
+	return output, err
 }
 
 //Read one rss source
@@ -90,42 +85,22 @@ func ReadUrl(url string) {
 
 //Read all sources from rss.source file
 func ReadAll() {
-
-	urlList, err := parseSourceFile("rss.source")
-	log.Println(urlList)
+	urlchan, err := parseSourceFile("rss.source")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output := make(chan *InfoChanel, 100)
-
-	sync := make(chan bool)
-
-	//asynchronous url reader
-	go func(c chan *InfoChanel) {
-		for _, url := range urlList {
-			// url := scanner.Text()
-			if url == "" {
-				return
-			}
-			channelInfo, err := ReadNewsFrom(url)
-			if err != nil {
-				close(c)
-				return
-			}
-			c <- channelInfo
+	for {
+		val, ok := <-urlchan
+		if ok {
+			go func() { ReadUrl(val) }()
+		} else {
+			break
 		}
-		sync <- true
-	}(output)
+	}
 
-	//asynchronous content consumer
-	go consume(output)
-
-	<-sync //wai until all done
-
-	//Clean up
-	close(output)
-	close(sync)
+	var input string
+	fmt.Scanln(&input)
 }
 
 //Asynchronously consumes the content comming from gorutine

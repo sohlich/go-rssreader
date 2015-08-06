@@ -12,11 +12,25 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"text/template"
 
 	"github.com/codegangsta/cli"
 )
+
+//Regex for url validation
+const urlValidatorRegex = "^((ftp|http|https):\\/\\/)?([a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)+.*)$"
+
+//Regex to remove all html from content
+const htmlReplacerRegex = "<[^>]*>.*</[^>]*>|<[^>]*>"
+
+//regex validator for URL
+var urlValidator *regexp.Regexp = regexp.MustCompile(urlValidatorRegex)
+
+//regex replacer for HTML
+var htmlReplacer *regexp.Regexp = regexp.MustCompile(htmlReplacerRegex)
+
+//Parsed template
+var tmplt *template.Template = template.Must(template.ParseFiles("news.tmpl"))
 
 func main() {
 
@@ -57,11 +71,10 @@ func parseSourceFile(pathToFile string) ([]string, error) {
 	scanner := bufio.NewScanner(sourcesFile)
 	urlList := []string{}
 	for scanner.Scan() {
-		validatedUrl, err := url.Parse(scanner.Text())
-		if err != nil {
-			continue
+		url := scanner.Text()
+		if urlValidator.MatchString(url) {
+			urlList = append(urlList, url)
 		}
-		urlList = append(urlList, validatedUrl.String())
 	}
 	return urlList, err
 }
@@ -69,18 +82,17 @@ func parseSourceFile(pathToFile string) ([]string, error) {
 //Read one rss source
 func ReadUrl(url string) {
 	val, err := ReadNewsFrom(url)
-	tmplt := template.Must(template.ParseFiles("news.tmpl"))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
-	tmplt.ExecuteTemplate(os.Stdout, "NewsTemplate", val)
+	renderToSTDOUT(val)
 }
 
 //Read all sources from rss.source file
 func ReadAll() {
 
 	urlList, err := parseSourceFile("rss.source")
-
+	log.Println(urlList)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -119,13 +131,12 @@ func ReadAll() {
 //Asynchronously consumes the content comming from gorutine
 //the content is then passed to template and written to command line
 func consume(newschannel chan *InfoChanel) {
-	tmplt := template.Must(template.ParseFiles("news.tmpl"))
 	for {
 		val, ok := <-newschannel
 		if !ok {
 			return
 		}
-		tmplt.ExecuteTemplate(os.Stdout, "NewsTemplate", val)
+		renderToSTDOUT(val)
 		time.Sleep(1)
 	}
 }
@@ -150,10 +161,7 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 	}
 	posts := make([]Post, 0)
 	for _, item := range doc.Channel.Items {
-		content, err := RemoveAllHtml(string(item.Descriptions[0]))
-		if err != nil {
-			continue
-		}
+		content := RemoveAllHtml(string(item.Descriptions[0]))
 		newPost := Post{
 			string(item.Titles[0]),
 			content,
@@ -169,13 +177,8 @@ func ExtractInfo(doc *RssDoc) (*InfoChanel, error) {
 
 //Removes all html with its content so only plain
 //text will survive.
-func RemoveAllHtml(content string) (string, error) {
-	regex, err := regexp.Compile("<[^>]*>.*</[^>]*>|<[^>]*>")
-	if err != nil {
-		return "", err
-	}
-	content = regex.ReplaceAllString(content, "")
-	return content, nil
+func RemoveAllHtml(content string) string {
+	return htmlReplacer.ReplaceAllString(content, "")
 }
 
 //Parse rss feed to RssDoc
@@ -187,4 +190,9 @@ func ReadRss(reader io.Reader) (*RssDoc, error) {
 	result := RssDoc{}
 	xml.Unmarshal(content, &result)
 	return &result, nil
+}
+
+//Renders template to STDOUT
+func renderToSTDOUT(post interface{}) {
+	tmplt.ExecuteTemplate(os.Stdout, "NewsTemplate", post)
 }

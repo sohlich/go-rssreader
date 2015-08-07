@@ -44,11 +44,14 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) {
+
 		val := c.String("url")
 		if val != "" {
 			ReadUrl(val)
-		} else {
+		} else if !c.Args().Present() {
 			ReadAll(runtime.NumCPU()) // run with 3 worker threads
+		} else {
+			log.Println("Unknown command")
 		}
 	}
 

@@ -2,9 +2,10 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"regexp"
+	"runtime"
+	"sync"
 	"time"
 
 	"encoding/xml"
@@ -18,6 +19,7 @@ import (
 )
 
 const (
+	APP_NAME          = "rssreader"
 	VERSION           = "v0.1.0"
 	urlValidatorRegex = "^((ftp|http|https):\\/\\/)?([a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)+.*)$"
 	htmlReplacerRegex = "<[^>]*>.*</[^>]*>|<[^>]*>"
@@ -31,7 +33,8 @@ var (
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "rssreader"
+	app.Name = APP_NAME
+	app.Version = VERSION
 	app.Usage = "read the rss feed to command line"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -45,7 +48,7 @@ func main() {
 		if val != "" {
 			ReadUrl(val)
 		} else {
-			ReadAll()
+			ReadAll(runtime.NumCPU()) // run with 3 worker threads
 		}
 	}
 
@@ -55,7 +58,6 @@ func main() {
 //Loads url strings from source file
 func parseSourceFile(pathToFile string) (<-chan string, error) {
 	sourcesFile, err := os.Open(pathToFile)
-	// defer sourcesFile.Close()
 	if err != nil {
 		log.Fatal("Cant read file with rss sources", err)
 	}
@@ -74,7 +76,8 @@ func parseSourceFile(pathToFile string) (<-chan string, error) {
 	return output, err
 }
 
-//Read one rss source
+//It reads rss source from url and pass it
+//to STDOUT
 func ReadUrl(url string) {
 	val, err := ReadNewsFrom(url)
 	if err != nil {
@@ -84,23 +87,26 @@ func ReadUrl(url string) {
 }
 
 //Read all sources from rss.source file
-func ReadAll() {
+func ReadAll(numWorkers int) {
 	urlchan, err := parseSourceFile("rss.source")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for {
-		val, ok := <-urlchan
-		if ok {
-			go func() { ReadUrl(val) }()
-		} else {
-			break
-		}
+	var wg sync.WaitGroup
+	wg.Add(runtime.NumCPU())
+
+	//assign 3 workers to read ursl
+	for n := 0; n < numWorkers; n++ {
+		go func(urlchan <-chan string) {
+			for url := range urlchan {
+				ReadUrl(url)
+			}
+			wg.Done()
+		}(urlchan)
 	}
 
-	var input string
-	fmt.Scanln(&input)
+	wg.Wait()
 }
 
 //Asynchronously consumes the content comming from gorutine

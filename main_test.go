@@ -1,25 +1,21 @@
 package main
 
 import (
-	"testing"
-	"fmt"
-	"io/ioutil"
-	"reflect"
 	"bytes"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
+	"testing"
 )
-
 
 func TestRemoveAllHtml(t *testing.T) {
 	testString := `Hello<ul><li>bla bla<li></ul>`
 	expected := "Hello"
-	result, err := RemoveAllHtml(testString);
-	IfError(err, t)
+	result := RemoveAllHtml(testString)
 	if result != expected {
-		t.Error("Expected : "+expected+" but got "+result)
+		t.Error("Expected : " + expected + " but got " + result)
 	}
 }
-
 
 func TestReadRss(t *testing.T) {
 	fmt.Println("Test ReadRss")
@@ -30,7 +26,6 @@ func TestReadRss(t *testing.T) {
 	expectedTitle := "Business Insider India"
 	assert.Equal(t, expectedTitle, string(result.Channel.Titles[0]))
 }
-
 
 func IfError(err error, t *testing.T) {
 	if err != nil {
